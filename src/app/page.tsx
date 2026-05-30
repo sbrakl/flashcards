@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { BookOpen, Plus, Play, Edit3, Loader2 } from 'lucide-react';
 import { supabase, Category } from '@/lib/supabase';
 import CreateCategoryModal from '@/components/CreateCategoryModal';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import AuthStatus from '@/components/AuthStatus';
 
 export default function Home() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -18,7 +20,6 @@ export default function Home() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      // Fetch categories
       const { data: catData, error: catError } = await supabase
         .from('fc_categories')
         .select('*')
@@ -26,14 +27,12 @@ export default function Home() {
 
       if (catError) throw catError;
 
-      // Fetch all flashcards to compute counts client-side (extremely bulletproof)
       const { data: cardsData, error: cardsError } = await supabase
         .from('fc_flashcards')
         .select('category_id');
 
       if (cardsError) throw cardsError;
 
-      // Compute counts
       const countsMap: Record<string, number> = {};
       cardsData?.forEach((card) => {
         countsMap[card.category_id] = (countsMap[card.category_id] || 0) + 1;
@@ -70,9 +69,9 @@ export default function Home() {
   };
 
   return (
-    <>
+    <ProtectedRoute>
       {/* Brand Header */}
-      <header className="app-header">
+      <header className="app-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
         <Link href="/" className="logo-container">
           <div className="logo-icon">
             <BookOpen size={22} />
@@ -82,10 +81,14 @@ export default function Home() {
           </div>
           <span className="logo-badge">Smart Study</span>
         </Link>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={18} />
-          <span>New Category</span>
-        </button>
+
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <AuthStatus />
+          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Plus size={18} />
+            <span>New Category</span>
+          </button>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -174,13 +177,12 @@ export default function Home() {
         )}
       </main>
 
-      {/* Creation Modal */}
       <CreateCategoryModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onCreate={handleCreateCategory}
       />
-    </>
+    </ProtectedRoute>
   );
 }
 
