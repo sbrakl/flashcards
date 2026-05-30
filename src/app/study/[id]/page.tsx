@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { ArrowLeft, BookOpen, Brain, Play, CheckCircle2, ChevronRight, Eye, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase, Category, Flashcard } from '@/lib/supabase';
 import PieChart from '@/components/PieChart';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 interface StudyPageProps {
   params: Promise<{ id: string }>;
@@ -211,7 +212,8 @@ export default function StudyPage({ params }: StudyPageProps) {
 
 
   return (
-    <>
+    <ProtectedRoute>
+      <>
       {/* -------------------- STATE 1: SETUP SCREEN -------------------- */}
       {sessionState === 'setup' && (
         <>
@@ -471,5 +473,6 @@ export default function StudyPage({ params }: StudyPageProps) {
         </div>
       )}
     </>
+    </ProtectedRoute>
   );
 }

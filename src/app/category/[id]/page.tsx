@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Plus, Trash2, Save, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase, Category, Flashcard } from '@/lib/supabase';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 interface CategoryPageProps {
   params: Promise<{ id: string }>;
@@ -198,7 +199,8 @@ export default function CategoryPage({ params }: CategoryPageProps) {
 
 
   return (
-    <>
+    <ProtectedRoute>
+      <>
       {/* Header Info */}
       <div className="page-title-section">
         <Link href="/" className="back-link">
@@ -364,5 +366,6 @@ export default function CategoryPage({ params }: CategoryPageProps) {
         </div>
       </div>
     </>
+    </ProtectedRoute>
   );
 }
