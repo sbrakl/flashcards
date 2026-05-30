@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
 import { ArrowLeft, BookOpen, Brain, Play, CheckCircle2, ChevronRight, Eye, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase, Category, Flashcard } from '@/lib/supabase';
 import PieChart from '@/components/PieChart';
@@ -344,7 +345,7 @@ export default function StudyPage({ params }: StudyPageProps) {
                 Question
               </div>
               <h3 className="question-display">
-                {sessionCards[currentIndex].question}
+                <ReactMarkdown>{sessionCards[currentIndex].question}</ReactMarkdown>
               </h3>
             </div>
 
@@ -375,7 +376,7 @@ export default function StudyPage({ params }: StudyPageProps) {
                 <div className="comparison-box correct">
                   <div className="comparison-label">Official Answer</div>
                   <div className="comparison-text">
-                    {sessionCards[currentIndex].answer}
+                    <ReactMarkdown>{sessionCards[currentIndex].answer}</ReactMarkdown>
                   </div>
                 </div>
               </div>
