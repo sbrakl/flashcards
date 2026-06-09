@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { BookOpen, Plus, Play, Edit3, Loader2 } from 'lucide-react';
+import { BookOpen, Plus, Play, Edit3, Loader2, Wrench } from 'lucide-react';
 import { supabase, Category } from '@/lib/supabase';
 import CreateCategoryModal from '@/components/CreateCategoryModal';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -84,6 +84,9 @@ export default function Home() {
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <AuthStatus />
+          <Link href="/admin/maintenance" className="btn btn-ghost" title="Maintenance">
+            <Wrench size={18} />
+          </Link>
           <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
             <Plus size={18} />
             <span>New Category</span>
