@@ -155,7 +155,7 @@ export default function MaintenancePage() {
         <div style={{ padding: '1.75rem', borderBottom: '1px solid var(--border-glow)' }}>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
             <Archive size={20} style={{ color: '#f87171' }} />
-            Cleanup Review History
+            Maintenance: Cleanup Review History
           </h2>
           <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
             Permanently delete review records older than a specific number of days.
