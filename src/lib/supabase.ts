@@ -28,6 +28,7 @@ export interface Flashcard {
   answer: string;
   last_rating: number | null;
   created_at: string;
+  is_memorizer: boolean;
 }
 
 export interface Review {
