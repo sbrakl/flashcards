@@ -14,6 +14,8 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder'
 );
 
+
+
 export interface Category {
   id: string;
   name: string;
