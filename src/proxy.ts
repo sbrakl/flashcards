@@ -18,8 +18,6 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  console.log(`Middleware: Authenticated User Found?=${!!user}, Target Pathname=${pathname}`);
-
   // Case A: User has no session cookie and attempts to access secure dashboard
   if (!user && pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/', request.url));
