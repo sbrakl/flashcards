@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { ArrowLeft, BookOpen, Brain, Play, CheckCircle2, ChevronRight, Eye, RefreshCw, Loader2 } from 'lucide-react';
-import { supabase, Category, Flashcard } from '@/lib/supabase';
+import { supabase, Category, Flashcard } from '@/lib/supabaseClient';
 import PieChart from '@/components/PieChart';
 import ProtectedRoute from '@/components/ProtectedRoute';
 

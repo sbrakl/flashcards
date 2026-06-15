@@ -14,6 +14,8 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder'
 );
 
+
+
 export interface Category {
   id: string;
   name: string;
@@ -28,6 +30,7 @@ export interface Flashcard {
   answer: string;
   last_rating: number | null;
   created_at: string;
+  is_memorizer: boolean;
 }
 
 export interface Review {
