@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { BookOpen, Plus, Play, Edit3, Loader2, Wrench } from 'lucide-react';
-import { supabase, Category } from '@/lib/supabase';
+import { supabase, Category } from '@/lib/supabaseClient';
 import CreateCategoryModal from '@/components/CreateCategoryModal';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AuthStatus from '@/components/AuthStatus';

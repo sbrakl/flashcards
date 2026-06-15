@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabaseClient';
 import { Trash2, Database, BookOpen, Layers, Calendar, AlertTriangle, CheckCircle2, Loader2, ArrowLeft, Archive } from 'lucide-react';
 
 type DbStats = {

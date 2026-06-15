@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Plus, Trash2, Save, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { supabase, Category, Flashcard } from '@/lib/supabase';
+import { supabase, Category, Flashcard } from '@/lib/supabaseClient';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
 interface CategoryPageProps {

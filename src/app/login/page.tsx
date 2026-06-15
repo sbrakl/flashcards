@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Mail, Lock, ArrowLeft, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,8 +41,8 @@ export default function LoginPage() {
     });
 
     if (authError) {
-      setError(authError.message);
       setLoading(false);
+      setError(authError.message);
       return;
     }
 
