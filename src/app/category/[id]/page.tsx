@@ -21,6 +21,7 @@ export default function CategoryPage({ params }: CategoryPageProps) {
   // Form State
   const [formQuestion, setFormQuestion] = useState('');
   const [formAnswer, setFormAnswer] = useState('');
+  const [formIsMemorizer, setFormIsMemorizer] = useState(false);
   
   // Loading & UX State
   const [loading, setLoading] = useState(true);
@@ -78,6 +79,7 @@ export default function CategoryPage({ params }: CategoryPageProps) {
     setSelectedCard(card);
     setFormQuestion(card.question);
     setFormAnswer(card.answer);
+    setFormIsMemorizer(card.is_memorizer);
     setIsEditing(true);
   };
 
@@ -85,13 +87,33 @@ export default function CategoryPage({ params }: CategoryPageProps) {
     setSelectedCard(null);
     setFormQuestion('');
     setFormAnswer('');
+    setFormIsMemorizer(false);
     setIsEditing(false);
+  };
+
+  const isValidBulletAnswer = (answer: string): boolean => {
+    const lines = answer.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '') continue; // skip empty lines
+      // Must match either top-level "- " or indented "  - " (two spaces + dash + space)
+      if (!/^-\s/.test(line.trimStart()) && !/^  -\s/.test(line)) {
+        return false;
+      }
+    }
+    return lines.some((l) => l.trim().length > 0);
   };
 
   const handleSaveCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formQuestion.trim() || !formAnswer.trim()) {
       showFeedback('error', 'Question and Answer fields are required.');
+      return;
+    }
+
+    // Validate bullet-point format if memorizer card
+    if (formIsMemorizer && !isValidBulletAnswer(formAnswer)) {
+      showFeedback('error', 'Memorizer answer must use bullet points. Start each point with a dash (-). Indent sub-points with two spaces.');
       return;
     }
 
@@ -104,6 +126,7 @@ export default function CategoryPage({ params }: CategoryPageProps) {
           .update({
             question: formQuestion.trim(),
             answer: formAnswer.trim(),
+            is_memorizer: formIsMemorizer,
           })
           .eq('id', selectedCard.id)
           .select();
@@ -125,6 +148,7 @@ export default function CategoryPage({ params }: CategoryPageProps) {
               category_id: categoryId,
               question: formQuestion.trim(),
               answer: formAnswer.trim(),
+              is_memorizer: formIsMemorizer,
             },
           ])
           .select();
@@ -272,9 +296,25 @@ export default function CategoryPage({ params }: CategoryPageProps) {
                     style={{ padding: '1.2rem' }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-                        CARD {index + 1}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                          CARD {index + 1}
+                        </span>
+                        {card.is_memorizer && (
+                          <span style={{
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.05em',
+                            padding: '0.15rem 0.4rem',
+                            borderRadius: '6px',
+                            background: 'rgba(6, 182, 212, 0.15)',
+                            color: 'var(--accent-cyan)',
+                            border: '1px solid rgba(6, 182, 212, 0.3)',
+                          }}>
+                            MEMORIZER
+                          </span>
+                        )}
+                      </div>
                       {card.last_rating ? (
                         <span className={`card-rating-badge rating-${card.last_rating}`} style={{ marginTop: 0 }}>
                           Rating: {card.last_rating}
@@ -330,7 +370,7 @@ export default function CategoryPage({ params }: CategoryPageProps) {
               />
             </div>
 
-            <div className="form-group" style={{ marginBottom: '2.5rem' }}>
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
               <label className="form-label">Answer</label>
               <textarea
                 className="form-input form-textarea"
@@ -339,6 +379,34 @@ export default function CategoryPage({ params }: CategoryPageProps) {
                 onChange={(e) => setFormAnswer(e.target.value)}
                 disabled={saveLoading}
               />
+            </div>
+
+            {/* Card Type Toggle */}
+            <div className="form-group" style={{ marginBottom: '2.5rem' }}>
+              <label className="form-label">Card Type</label>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  className={`btn ${!formIsMemorizer ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setFormIsMemorizer(false)}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Normal
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${formIsMemorizer ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setFormIsMemorizer(true)}
+                  style={{ flex: 1, justifyContent: 'center' }}
+                >
+                  Memorizer
+                </button>
+              </div>
+              {formIsMemorizer && (
+                <p style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--accent-cyan)', fontStyle: 'italic' }}>
+                  Answer should be in bullet points using Markdown dashes (<code>-</code>). Indent sub-points with two spaces.
+                </p>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
