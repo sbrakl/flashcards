@@ -120,6 +120,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
     const openRouterResponse = await fetch(
       'https://openrouter.ai/api/v1/chat/completions',
       {
@@ -139,8 +142,9 @@ export async function POST(request: NextRequest) {
           temperature: 0.3, // Lower temperature for more consistent structured output
           max_tokens: 1024,
         }),
+        signal: controller.signal,
       }
-    );
+    ).finally(() => clearTimeout(timeoutId));
 
     if (!openRouterResponse.ok) {
       const errorText = await openRouterResponse.text();
