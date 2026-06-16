@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use, useCallback } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
-import { ArrowLeft, BookOpen, Brain, Play, CheckCircle2, ChevronRight, Eye, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Brain, Play, CheckCircle2, ChevronRight, Eye, RefreshCw, Loader2, Sparkles, HelpCircle, Lightbulb, SendHorizonal, RotateCcw, AlertCircle } from 'lucide-react';
 import { supabase, Category, Flashcard } from '@/lib/supabaseClient';
 import PieChart from '@/components/PieChart';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -32,6 +32,16 @@ export default function StudyPage({ params }: StudyPageProps) {
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [sessionRatings, setSessionRatings] = useState<number[]>([]);
   const [submittingRating, setSubmittingRating] = useState(false);
+
+  // Memorizer card study state
+  const [memorizerPhase, setMemorizerPhase] = useState<'input' | 'result' | 'rating'>('input');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [matchedPoints, setMatchedPoints] = useState<string[]>([]);
+  const [missingPoints, setMissingPoints] = useState<string[]>([]);
+  const [aiFeedback, setAiFeedback] = useState<string>('');
+  const [activeHint, setActiveHint] = useState<{ index: number; text: string } | null>(null);
+  const [activeSocratic, setActiveSocratic] = useState<{ index: number; text: string } | null>(null);
 
   useEffect(() => {
     fetchCategoryAndCards();
@@ -130,6 +140,7 @@ export default function StudyPage({ params }: StudyPageProps) {
     setUserAnswer('');
     setIsAnswerRevealed(false);
     setSessionRatings([]);
+    resetMemorizerState();
     setSessionState('active');
   };
 
@@ -174,6 +185,7 @@ export default function StudyPage({ params }: StudyPageProps) {
         setCurrentIndex((prev) => prev + 1);
         setUserAnswer('');
         setIsAnswerRevealed(false);
+        resetMemorizerState();
       } else {
         setSessionState('finished');
       }
@@ -190,6 +202,122 @@ export default function StudyPage({ params }: StudyPageProps) {
     setSessionRatings([]);
     setSessionState('setup');
     fetchCategoryAndCards(); // Refresh latest ratings for a new smart pick
+  };
+
+  // ---------- Memorizer card helpers ----------
+
+  const resetMemorizerState = () => {
+    setMemorizerPhase('input');
+    setAiLoading(false);
+    setAiError(null);
+    setMatchedPoints([]);
+    setMissingPoints([]);
+    setAiFeedback('');
+    setActiveHint(null);
+    setActiveSocratic(null);
+  };
+
+  const handleMemorizerCheck = async () => {
+    if (!userAnswer.trim()) {
+      setAiError('Please write your answer before checking.');
+      return;
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+    setActiveHint(null);
+    setActiveSocratic(null);
+
+    try {
+      const res = await fetch('/api/ai/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userAnswer: userAnswer.trim(),
+          correctAnswer: sessionCards[currentIndex].answer,
+          action: 'compare',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'AI comparison failed.');
+      }
+
+      setMatchedPoints(data.matchedPoints || []);
+      setMissingPoints(data.missingPoints || []);
+      setAiFeedback(data.feedback || '');
+      setMemorizerPhase('result');
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to check answer. Please try again.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleMemorizerHint = async (point: string, index: number) => {
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const res = await fetch('/api/ai/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userAnswer: userAnswer.trim(),
+          correctAnswer: sessionCards[currentIndex].answer,
+          action: 'hint',
+          missingPoint: point,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to get hint.');
+      }
+
+      setActiveHint({ index, text: data.hint || '' });
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to get hint.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleMemorizerSocratic = async (point: string, index: number) => {
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      const res = await fetch('/api/ai/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userAnswer: userAnswer.trim(),
+          correctAnswer: sessionCards[currentIndex].answer,
+          action: 'socratic',
+          missingPoint: point,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to get Socratic question.');
+      }
+
+      setActiveSocratic({ index, text: data.socraticQuestion || '' });
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to get Socratic question.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleMemorizerRate = () => {
+    setMemorizerPhase('rating');
   };
 
   if (loading) {
@@ -334,96 +462,360 @@ export default function StudyPage({ params }: StudyPageProps) {
 
           {/* Main Flashcard Container */}
           <div className="glass-card study-card-view">
-            <div className="study-header">
-              <span className="study-title">Recall Card</span>
-              <span className="study-step-counter">
-                {currentIndex + 1} / {sessionCards.length}
-              </span>
-            </div>
-
-            {/* Question */}
-            <div style={{ margin: '1.5rem 0' }}>
-              <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.5rem', textAlign: 'center' }}>
-                Question
-              </div>
-              <h3 className="question-display">
-                <ReactMarkdown>{sessionCards[currentIndex].question}</ReactMarkdown>
-              </h3>
-            </div>
-
-            {/* Answer Input */}
-            <div className="answer-input-container">
-              <label className="form-label" style={{ textAlign: isAnswerRevealed ? 'left' : 'center' }}>
-                {isAnswerRevealed ? 'Your Drafted Answer' : 'Type Your Answer Below'}
-              </label>
-              <textarea
-                className="form-input form-textarea answer-input-box"
-                placeholder="Type your response here to test your memory..."
-                value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
-                disabled={isAnswerRevealed}
-              />
-            </div>
-
-            {/* Comparative View when Revealed */}
-            {isAnswerRevealed && (
-              <div className="revealed-comparison">
-                <div className="comparison-box user">
-                  <div className="comparison-label">Your Answer</div>
-                  <div className="comparison-text">
-                    {userAnswer.trim() || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No answer typed.</span>}
+            {sessionCards[currentIndex].is_memorizer ? (
+              /* ---------- MEMORIZER CARD UI ---------- */
+              <>
+                <div className="study-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className="study-title">Memorizer Card</span>
+                    <span style={{
+                      fontSize: '0.6rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.05em',
+                      padding: '0.15rem 0.4rem',
+                      borderRadius: '6px',
+                      background: 'rgba(6, 182, 212, 0.15)',
+                      color: 'var(--accent-cyan)',
+                      border: '1px solid rgba(6, 182, 212, 0.3)',
+                    }}>
+                      MEMORIZER
+                    </span>
                   </div>
+                  <span className="study-step-counter">
+                    {currentIndex + 1} / {sessionCards.length}
+                  </span>
                 </div>
 
-                <div className="comparison-box correct">
-                  <div className="comparison-label">Official Answer</div>
-                  <div className="comparison-text">
-                    <ReactMarkdown>{sessionCards[currentIndex].answer}</ReactMarkdown>
+                {/* Question */}
+                <div style={{ margin: '1.5rem 0' }}>
+                  <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.5rem', textAlign: 'center' }}>
+                    Question
                   </div>
+                  <h3 className="question-display">
+                    <ReactMarkdown>{sessionCards[currentIndex].question}</ReactMarkdown>
+                  </h3>
                 </div>
-              </div>
-            )}
 
-            {/* Actions */}
-            {!isAnswerRevealed ? (
-              <div className="reveal-action-container">
-                <button
-                  className="btn btn-primary"
-                  onClick={handleReveal}
-                  style={{ minWidth: '180px', padding: '0.9rem 2rem', fontSize: '1rem', justifyContent: 'center' }}
-                >
-                  <Eye size={18} />
-                  <span>Reveal Answer</span>
-                </button>
-              </div>
-            ) : (
-              <div className="rating-section">
-                <div className="rating-prompt">
-                  How well did you recall this answer?
+                {/* Answer Input - always editable in memorizer mode */}
+                <div className="answer-input-container">
+                  <label className="form-label" style={{ textAlign: 'left' }}>
+                    Write your bullet points here
+                  </label>
+                  <textarea
+                    className="form-input form-textarea answer-input-box"
+                    placeholder="Use dashes (-) for each point. Indent sub-points with a tab."
+                    value={userAnswer}
+                    onChange={(e) => setUserAnswer(e.target.value)}
+                    disabled={memorizerPhase === 'rating' || aiLoading}
+                    style={{ minHeight: '120px' }}
+                  />
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
+                    Use <code>- </code> for each point. Indent sub-points with two spaces <code>  - </code>.
+                  </p>
                 </div>
-                <div className="rating-button-group">
-                  {([1, 2, 3, 4, 5] as const).map((r) => {
-                    const tooltips = {
-                      1: 'Very Poor',
-                      2: 'Poor',
-                      3: 'Average',
-                      4: 'Good',
-                      5: 'Very Good',
-                    };
-                    return (
+
+                {/* Memorizer error message */}
+                {aiError && (
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    borderRadius: '10px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                    color: '#f87171',
+                    fontSize: '0.9rem',
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                  }}>
+                    <AlertCircle size={16} />
+                    <span>{aiError}</span>
+                  </div>
+                )}
+
+                {/* Phase: Input — Show "Check My Answer" button */}
+                {memorizerPhase === 'input' && (
+                  <div className="reveal-action-container">
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleMemorizerCheck}
+                      disabled={aiLoading || !userAnswer.trim()}
+                      style={{ minWidth: '200px', padding: '0.9rem 2rem', fontSize: '1rem', justifyContent: 'center' }}
+                    >
+                      {aiLoading ? (
+                        <><Loader2 size={18} style={{ animation: 'spin 1.5s linear infinite' }} /> <span>Checking...</span></>
+                      ) : (
+                        <><SendHorizonal size={18} /> <span>Check My Answer</span></>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Phase: Result — Show comparison panel */}
+                {memorizerPhase === 'result' && (
+                  <>
+                    <div className="revealed-comparison" style={{ marginBottom: '1.5rem' }}>
+                      <div className="comparison-box user" style={{ flex: '1 1 100%', marginBottom: '0' }}>
+                        <div className="comparison-label">Your Answer</div>
+                        <div className="comparison-text" style={{ maxHeight: '150px', overflowY: 'auto', fontSize: '0.85rem' }}>
+                          {userAnswer.trim() || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No answer typed.</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {aiFeedback && (
+                      <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem', fontStyle: 'italic' }}>
+                        {aiFeedback}
+                      </p>
+                    )}
+
+                    {/* Matched Points */}
+                    {matchedPoints.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#4ade80', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <CheckCircle2 size={14} /> Matched Points ({matchedPoints.length})
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                          {matchedPoints.map((point, i) => (
+                            <div key={i} style={{
+                              padding: '0.5rem 0.75rem',
+                              borderRadius: '8px',
+                              background: 'rgba(34, 197, 94, 0.08)',
+                              border: '1px solid rgba(34, 197, 94, 0.2)',
+                              color: '#86efac',
+                              fontSize: '0.85rem',
+                            }}>
+                              {point}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Missing Points */}
+                    {missingPoints.length > 0 && (
+                      <div style={{ marginBottom: '1.5rem' }}>
+                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f87171', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <AlertCircle size={14} /> Missing Points ({missingPoints.length})
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {missingPoints.map((point, i) => (
+                            <div key={i} style={{
+                              padding: '0.5rem 0.75rem',
+                              borderRadius: '8px',
+                              background: 'rgba(239, 68, 68, 0.06)',
+                              border: '1px solid rgba(239, 68, 68, 0.15)',
+                            }}>
+                              <div style={{ color: '#fca5a5', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
+                                {point}
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                  className="btn btn-ghost"
+                                  onClick={() => handleMemorizerHint(point, i)}
+                                  disabled={aiLoading}
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', gap: '0.3rem' }}
+                                >
+                                  <Lightbulb size={12} />
+                                  <span>Hint</span>
+                                </button>
+                                <button
+                                  className="btn btn-ghost"
+                                  onClick={() => handleMemorizerSocratic(point, i)}
+                                  disabled={aiLoading}
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', gap: '0.3rem' }}
+                                >
+                                  <HelpCircle size={12} />
+                                  <span>Socratic</span>
+                                </button>
+                                {aiLoading && <Loader2 size={14} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--text-muted)' }} />}
+                              </div>
+
+                              {/* Hint result */}
+                              {activeHint?.index === i && activeHint.text && (
+                                <div style={{
+                                  marginTop: '0.4rem',
+                                  padding: '0.4rem 0.6rem',
+                                  borderRadius: '6px',
+                                  background: 'rgba(250, 204, 21, 0.08)',
+                                  border: '1px solid rgba(250, 204, 21, 0.2)',
+                                  color: '#fde047',
+                                  fontSize: '0.8rem',
+                                }}>
+                                  <span style={{ fontWeight: 600 }}>💡 Hint: </span>{activeHint.text}
+                                </div>
+                              )}
+
+                              {/* Socratic result */}
+                              {activeSocratic?.index === i && activeSocratic.text && (
+                                <div style={{
+                                  marginTop: '0.4rem',
+                                  padding: '0.4rem 0.6rem',
+                                  borderRadius: '6px',
+                                  background: 'rgba(168, 85, 247, 0.08)',
+                                  border: '1px solid rgba(168, 85, 247, 0.2)',
+                                  color: '#d8b4fe',
+                                  fontSize: '0.8rem',
+                                }}>
+                                  <span style={{ fontWeight: 600 }}>❓ Socratic: </span>{activeSocratic.text}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                       <button
-                        key={r}
-                        className={`rating-btn rating-btn-${r}`}
-                        data-tooltip={tooltips[r]}
-                        onClick={() => handleRateAnswer(r)}
-                        disabled={submittingRating}
+                        className="btn btn-secondary"
+                        onClick={() => setMemorizerPhase('input')}
+                        disabled={aiLoading}
+                        style={{ justifyContent: 'center' }}
                       >
-                        {r}
+                        <RotateCcw size={16} />
+                        <span>Edit & Check Again</span>
                       </button>
-                    );
-                  })}
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleMemorizerRate}
+                        disabled={aiLoading}
+                        style={{ justifyContent: 'center' }}
+                      >
+                        <Sparkles size={16} />
+                        <span>I'm satisfied, rate this card</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* Phase: Rating */}
+                {memorizerPhase === 'rating' && (
+                  <div className="rating-section">
+                    <div className="rating-prompt">
+                      How well did you recall this answer?
+                    </div>
+                    <div className="rating-button-group">
+                      {([1, 2, 3, 4, 5] as const).map((r) => {
+                        const tooltips = {
+                          1: 'Very Poor',
+                          2: 'Poor',
+                          3: 'Average',
+                          4: 'Good',
+                          5: 'Very Good',
+                        };
+                        return (
+                          <button
+                            key={r}
+                            className={`rating-btn rating-btn-${r}`}
+                            data-tooltip={tooltips[r]}
+                            onClick={() => handleRateAnswer(r)}
+                            disabled={submittingRating}
+                          >
+                            {r}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* ---------- NORMAL CARD UI ---------- */
+              <>
+                <div className="study-header">
+                  <span className="study-title">Recall Card</span>
+                  <span className="study-step-counter">
+                    {currentIndex + 1} / {sessionCards.length}
+                  </span>
                 </div>
-              </div>
+
+                {/* Question */}
+                <div style={{ margin: '1.5rem 0' }}>
+                  <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '0.5rem', textAlign: 'center' }}>
+                    Question
+                  </div>
+                  <h3 className="question-display">
+                    <ReactMarkdown>{sessionCards[currentIndex].question}</ReactMarkdown>
+                  </h3>
+                </div>
+
+                {/* Answer Input */}
+                <div className="answer-input-container">
+                  <label className="form-label" style={{ textAlign: isAnswerRevealed ? 'left' : 'center' }}>
+                    {isAnswerRevealed ? 'Your Drafted Answer' : 'Type Your Answer Below'}
+                  </label>
+                  <textarea
+                    className="form-input form-textarea answer-input-box"
+                    placeholder="Type your response here to test your memory..."
+                    value={userAnswer}
+                    onChange={(e) => setUserAnswer(e.target.value)}
+                    disabled={isAnswerRevealed}
+                  />
+                </div>
+
+                {/* Comparative View when Revealed */}
+                {isAnswerRevealed && (
+                  <div className="revealed-comparison">
+                    <div className="comparison-box user">
+                      <div className="comparison-label">Your Answer</div>
+                      <div className="comparison-text">
+                        {userAnswer.trim() || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No answer typed.</span>}
+                      </div>
+                    </div>
+
+                    <div className="comparison-box correct">
+                      <div className="comparison-label">Official Answer</div>
+                      <div className="comparison-text">
+                        <ReactMarkdown>{sessionCards[currentIndex].answer}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                {!isAnswerRevealed ? (
+                  <div className="reveal-action-container">
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleReveal}
+                      style={{ minWidth: '180px', padding: '0.9rem 2rem', fontSize: '1rem', justifyContent: 'center' }}
+                    >
+                      <Eye size={18} />
+                      <span>Reveal Answer</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rating-section">
+                    <div className="rating-prompt">
+                      How well did you recall this answer?
+                    </div>
+                    <div className="rating-button-group">
+                      {([1, 2, 3, 4, 5] as const).map((r) => {
+                        const tooltips = {
+                          1: 'Very Poor',
+                          2: 'Poor',
+                          3: 'Average',
+                          4: 'Good',
+                          5: 'Very Good',
+                        };
+                        return (
+                          <button
+                            key={r}
+                            className={`rating-btn rating-btn-${r}`}
+                            data-tooltip={tooltips[r]}
+                            onClick={() => handleRateAnswer(r)}
+                            disabled={submittingRating}
+                          >
+                            {r}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
