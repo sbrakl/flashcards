@@ -2,21 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // ---------- Types ----------
 
-type CompareAction = 'compare' | 'hint' | 'socratic';
+interface MissingClue {
+  type: 'hint' | 'socratic';
+  clue: string;
+}
 
 interface CompareRequest {
   userAnswer: string;
   correctAnswer: string;
-  action: CompareAction;
-  missingPoint?: string;
 }
 
 interface CompareResponse {
-  matchedPoints?: string[];
-  missingPoints?: string[];
+  missingClues?: MissingClue[];
   feedback?: string;
-  hint?: string;
-  socraticQuestion?: string;
   error?: string;
 }
 
@@ -26,8 +24,6 @@ function validateRequest(body: unknown): body is CompareRequest {
   if (!body || typeof body !== 'object') return false;
   const r = body as Record<string, unknown>;
   if (typeof r.userAnswer !== 'string' || typeof r.correctAnswer !== 'string') return false;
-  if (!['compare', 'hint', 'socratic'].includes(r.action as string)) return false;
-  if ((r.action === 'hint' || r.action === 'socratic') && typeof r.missingPoint !== 'string') return false;
   return true;
 }
 
@@ -49,33 +45,18 @@ Rules:
 - A point is MISSED if the user omitted it or got it significantly wrong.
 - Ignore trivial differences in phrasing.
 
+For each MISSED point, create a learning clue. Decide per-point which format is most helpful:
+- **Hint** (type: "hint"): A cryptic clue like a fill-in-the-blank, word scramble, crossword-style hint, or acronym hint. Be creative but never reveal the full answer directly.
+- **Socratic question** (type: "socratic"): A guiding question that leads the user to recall the point on their own — never reveal the answer directly.
+
 Respond with valid JSON only (no markdown fences, no extra text):
 {
   "matchedPoints": ["point 1", "point 2", ...],
-  "missingPoints": ["point 3", ...],
+  "missingClues": [
+    { "type": "hint", "clue": "Cryptic clue here" },
+    { "type": "socratic", "clue": "Guiding question here?" }
+  ],
   "feedback": "Brief encouraging summary of how they did."
-}`;
-}
-
-function buildHintPrompt(missingPoint: string): string {
-  return `You are a flashcard study assistant. The user missed a bullet point in their answer. Give them 2-3 key words (NOT the full point) from the missing point below to jog their memory. Be cryptic but helpful.
-
-**Missing point:** ${missingPoint}
-
-Respond with valid JSON only:
-{
-  "hint": "keyword1, keyword2, keyword3"
-}`;
-}
-
-function buildSocraticPrompt(missingPoint: string): string {
-  return `You are a flashcard study assistant using the Socratic method. The user missed a bullet point. Ask a guiding question that leads them to recall the missing point on their own — never reveal the answer directly.
-
-**Missing point:** ${missingPoint}
-
-Respond with valid JSON only:
-{
-  "socraticQuestion": "Your guiding question here?"
 }`;
 }
 
@@ -92,7 +73,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { userAnswer, correctAnswer, action, missingPoint } = body;
+    const { userAnswer, correctAnswer } = body;
 
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -102,23 +83,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the system + user message pair based on action
-    let systemPrompt = 'You are a helpful flashcard study assistant. Always respond with valid JSON only, no markdown fences.';
-    let userPrompt: string;
-
-    switch (action) {
-      case 'compare':
-        userPrompt = buildComparePrompt(userAnswer, correctAnswer);
-        break;
-      case 'hint':
-        userPrompt = buildHintPrompt(missingPoint!);
-        break;
-      case 'socratic':
-        userPrompt = buildSocraticPrompt(missingPoint!);
-        break;
-      default:
-        return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });
-    }
+    const systemPrompt = 'You are a helpful flashcard study assistant. Always respond with valid JSON only, no markdown fences.';
+    const userPrompt = buildComparePrompt(userAnswer, correctAnswer);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
@@ -140,7 +106,7 @@ export async function POST(request: NextRequest) {
             { role: 'user', content: userPrompt },
           ],
           temperature: 0.3, // Lower temperature for more consistent structured output
-          max_tokens: 1024,
+          max_tokens: 2048,
         }),
         signal: controller.signal,
       }
@@ -179,24 +145,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the response based on action
-    let result: CompareResponse = {};
-
-    switch (action) {
-      case 'compare':
-        result = {
-          matchedPoints: Array.isArray(parsed.matchedPoints) ? parsed.matchedPoints as string[] : [],
-          missingPoints: Array.isArray(parsed.missingPoints) ? parsed.missingPoints as string[] : [],
-          feedback: typeof parsed.feedback === 'string' ? parsed.feedback : '',
-        };
-        break;
-      case 'hint':
-        result = { hint: typeof parsed.hint === 'string' ? parsed.hint : '' };
-        break;
-      case 'socratic':
-        result = { socraticQuestion: typeof parsed.socraticQuestion === 'string' ? parsed.socraticQuestion : '' };
-        break;
-    }
+    // Build the response
+    const result: CompareResponse = {
+      missingClues: Array.isArray(parsed.missingClues)
+        ? (parsed.missingClues as Array<Record<string, unknown>>).map(
+            (c) => ({
+              type: c.type === 'socratic' ? 'socratic' as const : 'hint' as const,
+              clue: typeof c.clue === 'string' ? c.clue : '',
+            })
+          ).filter((c) => c.clue.length > 0)
+        : [],
+      feedback: typeof parsed.feedback === 'string' ? parsed.feedback : '',
+    };
 
     return NextResponse.json(result);
   } catch (err) {
