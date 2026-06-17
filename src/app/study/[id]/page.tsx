@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use, useCallback } from 'react';
+import React, { useState, useEffect, use, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { ArrowLeft, BookOpen, Brain, Play, ChevronRight, Eye, RefreshCw, Loader2, Sparkles, SendHorizonal, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -39,6 +39,8 @@ export default function StudyPage({ params }: StudyPageProps) {
   const [aiError, setAiError] = useState<string | null>(null);
   const [missingClues, setMissingClues] = useState<{ type: 'hint' | 'socratic'; clue: string }[]>([]);
   const [aiFeedback, setAiFeedback] = useState<string>('');
+  const lastApiCallTime = useRef(0);
+  const [isCooldown, setIsCooldown] = useState(false);
 
   useEffect(() => {
     fetchCategoryAndCards();
@@ -203,22 +205,51 @@ export default function StudyPage({ params }: StudyPageProps) {
 
   // ---------- Memorizer card helpers ----------
 
+  const isValidBulletAnswer = (answer: string): boolean => {
+    const lines = answer.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '') continue;
+      // Top-level: must start with "- "  |  Indented: must start with "  - "
+      if (!/^-\s/.test(trimmed) && !/^  -\s/.test(line)) {
+        return false;
+      }
+    }
+    return lines.some((l) => l.trim().length > 0);
+  };
+
   const resetMemorizerState = () => {
     setMemorizerPhase('input');
     setAiLoading(false);
     setAiError(null);
     setMissingClues([]);
     setAiFeedback('');
+    setIsCooldown(false);
+    lastApiCallTime.current = 0;
   };
 
   const handleMemorizerCheck = async () => {
+    // D2: Cooldown check — 3s between API calls
+    const now = Date.now();
+    if (now - lastApiCallTime.current < 3000) {
+      setAiError('Please wait a moment before checking again.');
+      return;
+    }
+
     if (!userAnswer.trim()) {
       setAiError('Please write your answer before checking.');
       return;
     }
 
+    // D1: Validate bullet-point format before calling API
+    if (!isValidBulletAnswer(userAnswer)) {
+      setAiError('Please write your answer in bullet points using dashes (-).');
+      return;
+    }
+
     setAiLoading(true);
     setAiError(null);
+    setIsCooldown(true);
 
     try {
       const res = await fetch('/api/ai/compare', {
@@ -243,6 +274,8 @@ export default function StudyPage({ params }: StudyPageProps) {
       setAiError(err.message || 'Failed to check answer. Please try again.');
     } finally {
       setAiLoading(false);
+      lastApiCallTime.current = Date.now();
+      setTimeout(() => setIsCooldown(false), 3000);
     }
   };
 
@@ -442,6 +475,10 @@ export default function StudyPage({ params }: StudyPageProps) {
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
                     Use <code>- </code> for each point. Indent sub-points with two spaces <code>  - </code>.
                   </p>
+                  {/* D2: OpenRouter credits note */}
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', opacity: 0.6 }}>
+                    ⚡ AI comparison uses OpenRouter credits
+                  </p>
                 </div>
 
                 {/* Memorizer error message */}
@@ -469,11 +506,13 @@ export default function StudyPage({ params }: StudyPageProps) {
                     <button
                       className="btn btn-primary"
                       onClick={handleMemorizerCheck}
-                      disabled={aiLoading || !userAnswer.trim()}
+                      disabled={aiLoading || isCooldown || !userAnswer.trim()}
                       style={{ minWidth: '200px', padding: '0.9rem 2rem', fontSize: '1rem', justifyContent: 'center' }}
                     >
                       {aiLoading ? (
                         <><Loader2 size={18} style={{ animation: 'spin 1.5s linear infinite' }} /> <span>Checking...</span></>
+                      ) : isCooldown ? (
+                        <><Loader2 size={18} style={{ animation: 'spin 1.5s linear infinite' }} /> <span>Wait...</span></>
                       ) : (
                         <><SendHorizonal size={18} /> <span>Check My Answer</span></>
                       )}
