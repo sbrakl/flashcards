@@ -5,9 +5,11 @@
   "scripts": {
     "restart": "next dev",
     "dev": "next dev",
-    "dev:remote": "dotenv -e .env.remote -- next dev",
+    "dev:remote": "NODE_OPTIONS='--inspect' dotenv -e .env.remote -- next dev --webpack",
     "build": "next build",
+    "build:profile": "dotenv -e .env.remote -- next build --profile",
     "start": "next start",
+    "start:profile": "NODE_OPTIONS='--inspect=127.0.0.1:9231' dotenv -e .env.remote -- next start -p 3001",
     "lint": "eslint"
   },
   "dependencies": {
