@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use, useCallback } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
-import { ArrowLeft, BookOpen, Brain, Play, CheckCircle2, ChevronRight, Eye, RefreshCw, Loader2, Sparkles, HelpCircle, Lightbulb, SendHorizonal, RotateCcw, AlertCircle } from 'lucide-react';
+import { ArrowLeft, BookOpen, Brain, Play, ChevronRight, Eye, RefreshCw, Loader2, Sparkles, SendHorizonal, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase, Category, Flashcard } from '@/lib/supabaseClient';
 import PieChart from '@/components/PieChart';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -37,11 +37,8 @@ export default function StudyPage({ params }: StudyPageProps) {
   const [memorizerPhase, setMemorizerPhase] = useState<'input' | 'result' | 'rating'>('input');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [matchedPoints, setMatchedPoints] = useState<string[]>([]);
-  const [missingPoints, setMissingPoints] = useState<string[]>([]);
+  const [missingClues, setMissingClues] = useState<{ type: 'hint' | 'socratic'; clue: string }[]>([]);
   const [aiFeedback, setAiFeedback] = useState<string>('');
-  const [activeHint, setActiveHint] = useState<{ index: number; text: string } | null>(null);
-  const [activeSocratic, setActiveSocratic] = useState<{ index: number; text: string } | null>(null);
 
   useEffect(() => {
     fetchCategoryAndCards();
@@ -210,11 +207,8 @@ export default function StudyPage({ params }: StudyPageProps) {
     setMemorizerPhase('input');
     setAiLoading(false);
     setAiError(null);
-    setMatchedPoints([]);
-    setMissingPoints([]);
+    setMissingClues([]);
     setAiFeedback('');
-    setActiveHint(null);
-    setActiveSocratic(null);
   };
 
   const handleMemorizerCheck = async () => {
@@ -225,8 +219,6 @@ export default function StudyPage({ params }: StudyPageProps) {
 
     setAiLoading(true);
     setAiError(null);
-    setActiveHint(null);
-    setActiveSocratic(null);
 
     try {
       const res = await fetch('/api/ai/compare', {
@@ -235,7 +227,6 @@ export default function StudyPage({ params }: StudyPageProps) {
         body: JSON.stringify({
           userAnswer: userAnswer.trim(),
           correctAnswer: sessionCards[currentIndex].answer,
-          action: 'compare',
         }),
       });
 
@@ -245,72 +236,11 @@ export default function StudyPage({ params }: StudyPageProps) {
         throw new Error(data.error || 'AI comparison failed.');
       }
 
-      setMatchedPoints(data.matchedPoints || []);
-      setMissingPoints(data.missingPoints || []);
+      setMissingClues(data.missingClues || []);
       setAiFeedback(data.feedback || '');
       setMemorizerPhase('result');
     } catch (err: any) {
       setAiError(err.message || 'Failed to check answer. Please try again.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleMemorizerHint = async (point: string, index: number) => {
-    setAiLoading(true);
-    setAiError(null);
-
-    try {
-      const res = await fetch('/api/ai/compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userAnswer: userAnswer.trim(),
-          correctAnswer: sessionCards[currentIndex].answer,
-          action: 'hint',
-          missingPoint: point,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to get hint.');
-      }
-
-      setActiveHint({ index, text: data.hint || '' });
-    } catch (err: any) {
-      setAiError(err.message || 'Failed to get hint.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleMemorizerSocratic = async (point: string, index: number) => {
-    setAiLoading(true);
-    setAiError(null);
-
-    try {
-      const res = await fetch('/api/ai/compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userAnswer: userAnswer.trim(),
-          correctAnswer: sessionCards[currentIndex].answer,
-          action: 'socratic',
-          missingPoint: point,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to get Socratic question.');
-      }
-
-      setActiveSocratic({ index, text: data.socraticQuestion || '' });
-    } catch (err: any) {
-      setAiError(err.message || 'Failed to get Socratic question.');
     } finally {
       setAiLoading(false);
     }
@@ -569,97 +499,33 @@ export default function StudyPage({ params }: StudyPageProps) {
                       </p>
                     )}
 
-                    {/* Matched Points */}
-                    {matchedPoints.length > 0 && (
-                      <div style={{ marginBottom: '1rem' }}>
-                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#4ade80', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <CheckCircle2 size={14} /> Matched Points ({matchedPoints.length})
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                          {matchedPoints.map((point, i) => (
-                            <div key={i} style={{
-                              padding: '0.5rem 0.75rem',
-                              borderRadius: '8px',
-                              background: 'rgba(34, 197, 94, 0.08)',
-                              border: '1px solid rgba(34, 197, 94, 0.2)',
-                              color: '#86efac',
-                              fontSize: '0.85rem',
-                            }}>
-                              {point}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Missing Points */}
-                    {missingPoints.length > 0 && (
+                    {/* Missing Clues — hints & Socratic questions from AI */}
+                    {missingClues.length > 0 && (
                       <div style={{ marginBottom: '1.5rem' }}>
-                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f87171', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <AlertCircle size={14} /> Missing Points ({missingPoints.length})
+                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <AlertCircle size={14} /> Points to Review ({missingClues.length})
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                          {missingPoints.map((point, i) => (
+                          {missingClues.map((clue, i) => (
                             <div key={i} style={{
-                              padding: '0.5rem 0.75rem',
+                              padding: '0.65rem 0.85rem',
                               borderRadius: '8px',
-                              background: 'rgba(239, 68, 68, 0.06)',
-                              border: '1px solid rgba(239, 68, 68, 0.15)',
+                              background: clue.type === 'hint'
+                                ? 'rgba(250, 204, 21, 0.06)'
+                                : 'rgba(168, 85, 247, 0.06)',
+                              border: clue.type === 'hint'
+                                ? '1px solid rgba(250, 204, 21, 0.2)'
+                                : '1px solid rgba(168, 85, 247, 0.2)',
+                              color: clue.type === 'hint' ? '#fde047' : '#d8b4fe',
+                              fontSize: '0.9rem',
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              gap: '0.5rem',
                             }}>
-                              <div style={{ color: '#fca5a5', fontSize: '0.85rem', marginBottom: '0.4rem' }}>
-                                {point}
-                              </div>
-                              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button
-                                  className="btn btn-ghost"
-                                  onClick={() => handleMemorizerHint(point, i)}
-                                  disabled={aiLoading}
-                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', gap: '0.3rem' }}
-                                >
-                                  <Lightbulb size={12} />
-                                  <span>Hint</span>
-                                </button>
-                                <button
-                                  className="btn btn-ghost"
-                                  onClick={() => handleMemorizerSocratic(point, i)}
-                                  disabled={aiLoading}
-                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', gap: '0.3rem' }}
-                                >
-                                  <HelpCircle size={12} />
-                                  <span>Socratic</span>
-                                </button>
-                                {aiLoading && <Loader2 size={14} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--text-muted)' }} />}
-                              </div>
-
-                              {/* Hint result */}
-                              {activeHint?.index === i && activeHint.text && (
-                                <div style={{
-                                  marginTop: '0.4rem',
-                                  padding: '0.4rem 0.6rem',
-                                  borderRadius: '6px',
-                                  background: 'rgba(250, 204, 21, 0.08)',
-                                  border: '1px solid rgba(250, 204, 21, 0.2)',
-                                  color: '#fde047',
-                                  fontSize: '0.8rem',
-                                }}>
-                                  <span style={{ fontWeight: 600 }}>💡 Hint: </span>{activeHint.text}
-                                </div>
-                              )}
-
-                              {/* Socratic result */}
-                              {activeSocratic?.index === i && activeSocratic.text && (
-                                <div style={{
-                                  marginTop: '0.4rem',
-                                  padding: '0.4rem 0.6rem',
-                                  borderRadius: '6px',
-                                  background: 'rgba(168, 85, 247, 0.08)',
-                                  border: '1px solid rgba(168, 85, 247, 0.2)',
-                                  color: '#d8b4fe',
-                                  fontSize: '0.8rem',
-                                }}>
-                                  <span style={{ fontWeight: 600 }}>❓ Socratic: </span>{activeSocratic.text}
-                                </div>
-                              )}
+                              <span style={{ flexShrink: 0, marginTop: '0.1rem' }}>
+                                {clue.type === 'hint' ? '🧩' : '❓'}
+                              </span>
+                              <span>{clue.clue}</span>
                             </div>
                           ))}
                         </div>
