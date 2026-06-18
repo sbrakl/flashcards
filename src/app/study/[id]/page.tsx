@@ -35,6 +35,7 @@ export default function StudyPage({ params }: StudyPageProps) {
 
   // Memorizer card study state
   const [memorizerPhase, setMemorizerPhase] = useState<'input' | 'result' | 'rating'>('input');
+  const [memorizerAnswerRevealed, setMemorizerAnswerRevealed] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [missingClues, setMissingClues] = useState<{ type: 'hint' | 'socratic'; clue: string }[]>([]);
@@ -220,6 +221,7 @@ export default function StudyPage({ params }: StudyPageProps) {
 
   const resetMemorizerState = () => {
     setMemorizerPhase('input');
+    setMemorizerAnswerRevealed(false);
     setAiLoading(false);
     setAiError(null);
     setMissingClues([]);
@@ -524,12 +526,20 @@ export default function StudyPage({ params }: StudyPageProps) {
                 {memorizerPhase === 'result' && (
                   <>
                     <div className="revealed-comparison" style={{ marginBottom: '1.5rem' }}>
-                      <div className="comparison-box user" style={{ flex: '1 1 100%', marginBottom: '0' }}>
+                      <div className="comparison-box user" style={{ flex: '1 1 100%', marginBottom: memorizerAnswerRevealed ? '1rem' : '0' }}>
                         <div className="comparison-label">Your Answer</div>
                         <div className="comparison-text" style={{ maxHeight: '150px', overflowY: 'auto', fontSize: '0.85rem' }}>
                           {userAnswer.trim() || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No answer typed.</span>}
                         </div>
                       </div>
+                      {memorizerAnswerRevealed && (
+                        <div className="comparison-box correct" style={{ flex: '1 1 100%' }}>
+                          <div className="comparison-label">Official Answer</div>
+                          <div className="comparison-text" style={{ maxHeight: '200px', overflowY: 'auto', fontSize: '0.85rem' }}>
+                            <ReactMarkdown>{sessionCards[currentIndex].answer}</ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {aiFeedback && (
@@ -581,6 +591,15 @@ export default function StudyPage({ params }: StudyPageProps) {
                       >
                         <RotateCcw size={16} />
                         <span>Edit & Check Again</span>
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => setMemorizerAnswerRevealed(true)}
+                        disabled={memorizerAnswerRevealed || aiLoading}
+                        style={{ justifyContent: 'center' }}
+                      >
+                        <Eye size={16} />
+                        <span>Reveal Answer</span>
                       </button>
                       <button
                         className="btn btn-primary"
