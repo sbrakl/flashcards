@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered study flow for memorizer cards where users write bullet-point answers, submit them for AI comparison (via OpenRouter/DeepSeek V4 Flash), and receive hints or Socratic questions for missing points — iterating until satisfied before rating.
+Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered study flow for memorizer cards where users write bullet-point answers, submit them for AI comparison (via OpenRouter/DeepSeek V4 Flash), and receive a list of AI-generated hints or Socratic questions for missing points — iterating until satisfied before rating.
 
 ---
 
@@ -43,23 +43,18 @@ Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered s
   {
     userAnswer: string;       // User's bullet-point answer
     correctAnswer: string;    // Saved correct answer (bullet points)
-    action: "compare" | "hint" | "socratic";
-    missingPoint?: string;    // The specific point to hint/question about (for hint/socratic actions)
+    action: "compare";       // Single action for comparison
   }
   ```
-- For `action: "compare"`: AI compares user's bullet points against correct answer, returns:
-  - `matchedPoints: string[]` — points user got right
-  - `missingPoints: string[]` — points user missed
-  - `feedback: string` — summary sentence
-- For `action: "hint"`: AI returns 2-3 key words from the missing point (not the full text)
-- For `action: "socratic"`: AI returns a Socratic guiding question that leads the user to recall the missing point
+- For `action: "compare"`: AI compares user's bullet points against correct answer and returns:
+  - `missingClues: { type: 'hint' | 'socratic'; clue: string }[]` — For each missed point, the AI decides whether a cryptic hint (🧩) or a Socratic question (❓) is more helpful and provides it.
+  - `feedback: string` — summary sentence (e.g., "You got 2 out of 4 points. Let's work on the rest!")
 - Uses OpenRouter API with DeepSeek V4 Flash model
 - Reads API key from `process.env.OPENROUTER_API_KEY`
 - Returns JSON response
 
 **B2. Add environment variable**
 - Document `OPENROUTER_API_KEY` in `.env.local` (user has the key)
-- Add to `next.config.ts` if needed for client-side exposure (not needed — API route is server-side only)
 
 ---
 
@@ -75,10 +70,7 @@ Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered s
 - Show a textarea labeled "Write your bullet points here" with placeholder hint: *"Use dashes (-) for each point. Indent sub-points with a tab."*
 - Below the textarea, a "Check My Answer" button that calls the API (`/api/ai/compare` with `action: "compare"`)
 - On response, display a **comparison result panel**:
-  - ✅ **Matched points** (green) — points user recalled correctly
-  - ❌ **Missing points** (red) — points user missed, each with two action buttons:
-    - *"Hint"* — calls API with `action: "hint"`, shows 2-3 key words inline
-    - *"Socratic"* — calls API with `action: "socratic"`, shows a guiding question inline
+  - ❌ **Missing Points/Clues** — Render each clue as a styled card with a 🧩 (hint) or ❓ (Socratic) icon and the clue text.
   - User can update their answer in the textarea and click "Check Again" to re-compare
   - A "I'm satisfied, rate this card" button appears once user has reviewed all feedback
 
@@ -102,10 +94,10 @@ Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered s
 
 **D2. Rate limiting / API cost consideration**
 - Add a note in the UI: "AI comparison uses OpenRouter credits"
-- Consider adding a cooldown (e.g., 3s between API calls) to prevent spam
+- Add a cooldown (e.g., 3s between API calls) to prevent spam
 
 **D3. Mobile responsiveness**
-- Ensure the memorizer UI (comparison panel with action buttons) works on mobile viewports
+- Ensure the memorizer UI (comparison panel with clue cards) works on mobile viewports
 
 ---
 
@@ -114,8 +106,8 @@ Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered s
 | File | What to modify |
 |------|---------------|
 | `src/app/category/[id]/page.tsx` | Add `formIsMemorizer` state, toggle UI, wire into create/update/select/reset, show badge in card list |
-| `src/app/study/[id]/page.tsx` | Branch UI for memorizer cards, AI comparison panel, hint/socratic interactions, iterative check flow |
-| `src/app/api/ai/compare/route.ts` | **New file** — POST endpoint calling OpenRouter DeepSeek V4 Flash |
+| `src/app/study/[id]/page.tsx` | Branch UI for memorizer cards, AI comparison panel, streamlined clue display, iterative check flow |
+| `src/app/api/ai/compare/route.ts` | **New file** — POST endpoint calling OpenRouter DeepSeek V4 Flash with clue-generation prompt |
 | `.env.local` | Add `OPENROUTER_API_KEY` (user has the key) |
 | `src/lib/supabaseClient.ts` | Already has `is_memorizer: boolean` — no change needed |
 
@@ -123,33 +115,22 @@ Add an `is_memorizer` toggle to the flashcard editor, then build an AI-powered s
 
 ## Verification
 
-1. **Editor toggle**: Create a new card with "Memorizer" selected → verify `is_memorizer = true` in DB. Edit an existing card → toggle memorizer on/off → verify update in DB.
+1. **Editor toggle**: Create a new card with "Memorizer" selected → verify `is_memorizer = true` in DB.
 2. **Bullet validation hint**: Toggle memorizer ON → verify hint text appears below Answer textarea.
 3. **Card list badge**: Verify "MEMORIZER" badge appears on memorizer cards in the left column.
 4. **Study mode — normal cards**: Verify normal cards still use the existing flow unchanged.
 5. **Study mode — memorizer cards**: Start a session with memorizer cards → verify different UI appears.
-6. **AI comparison**: Write bullet points → click "Check My Answer" → verify API returns matched/missing points.
-7. **Hint action**: Click "Hint" on a missing point → verify 2-3 key words appear.
-8. **Socratic action**: Click "Socratic" → verify a guiding question appears.
-9. **Iterative check**: Update answer → click "Check Again" → verify re-comparison works.
-10. **Rating after memorizer**: Click "I'm satisfied" → verify rating buttons appear → rate → verify next card loads.
-11. **Error handling**: Disconnect network → verify graceful error message with retry option.
+6. **AI comparison**: Write bullet points → click "Check My Answer" → verify API returns clues as hints or Socratic questions in a single call.
+7. **No per-point buttons**: Verify that there are no separate "Hint" or "Socratic" buttons per missing point.
+8. **Iterative check**: Update answer → click "Check Again" → verify re-comparison works.
+9. **Rating after memorizer**: Click "I'm satisfied" → verify rating buttons appear → rate → verify next card loads.
+10. **Error handling**: Disconnect network → verify graceful error message with retry option.
 
 ---
 
 ## Decisions
 
-- **DB migration**: Already done — `is_memorizer` column exists in production
-- **OpenRouter API key**: User has one — will add to `.env.local`
-- **AI interaction model**: User submits all bullet points at once → AI compares → user iterates with hints/Socratic help → rates when satisfied
+- **AI interaction model**: User submits all bullet points at once → AI compares and generates clues directly → user iterates with these clues → rates when satisfied. This reduces API calls and improves UX.
 - **Study session mixing**: Memorizer and normal cards are mixed in the same session — UI branches per-card based on `is_memorizer`
 - **API routing**: Next.js API route (`/api/ai/compare`) — keeps API key server-side
 - **Model**: DeepSeek V4 Flash via OpenRouter — model name configurable in the API route
-
----
-
-## Further Considerations
-
-1. **AI response caching**: For identical `correctAnswer` + `userAnswer` pairs, consider caching the comparison result to avoid repeated API costs. Out of scope for initial implementation.
-2. **Offline fallback**: Without internet, AI features won't work. The UI should clearly indicate this and allow the user to proceed to manual self-assessment. Out of scope for initial implementation.
-3. **Prompt engineering**: The quality of hints and Socratic questions depends heavily on the system prompt. May need tuning after initial testing.
