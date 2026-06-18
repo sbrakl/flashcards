@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
           'X-Title': 'AetherFlash',
         },
         body: JSON.stringify({
-          model: 'deepseek/deepseek-v4-flash',
+          model: 'google/gemma-4-31b-it:free',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
