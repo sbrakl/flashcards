@@ -3,30 +3,20 @@ import type { NextRequest } from 'next/server';
 import { createServerSupabaseClient } from './lib/supabaseServer';
 
 export async function proxy(request: NextRequest) {
-
-  // 1. Create an initial response object
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
-
-  // 2. Initialize a special Supabase Client configured for Middleware
   const supabase = await createServerSupabaseClient();
 
-  // 3. Ask Supabase to securely decrypt the cookie and return the current user
-  const { data: { user } } = await supabase.auth.getUser();
+  // Cryptographically verify the JWT signature via WebCrypto (no Auth server call)
+  const { data: claimsResult } = await supabase.auth.getClaims();
+  const isAuthenticated = claimsResult?.claims != null;
   const { pathname } = request.nextUrl;
 
-  console.log(`Middleware: Authenticated User Found?=${!!user}, Target Pathname=${pathname}`);
-
   // Case A: User has no session cookie and attempts to access secure dashboard
-  if (!user && pathname.startsWith('/dashboard')) {
+  if (!isAuthenticated && pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
   // Case B: Authenticated user hits the landing page—automatically forward to dashboard
-  if (user && pathname === '/') {
+  if (isAuthenticated && pathname === '/') {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
