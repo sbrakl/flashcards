@@ -15,6 +15,11 @@ It features:
 You can create an account or log in to access your flash cards. The app uses Supabase for authentication and data storage.
 ![Login Page Screenshot](./docs/images/loginpage.png)
 
+## Memory card using AI
+
+When you create a flash card, you can toggle the "Card Type" to "Memorizer". This allows you to write your answer in bullet points. When you study a memorizer card, you can submit your answer for AI comparison. The AI will analyze your answer against the correct answer and provide feedback on missing points, along with hints or Socratic questions to help you improve.
+
+![Memorizer Card Screenshot](./docs/images/memory_card_hits.png)
 
 # Environment Variables
 Make sure to set the following environment variables in your `.env.local` file:
