@@ -1,3 +1,40 @@
+# Flash Card
+
+This is a flash card app built with Next.js, Supabase, and OpenRouter's DeepSeek V4 Flash model. It allows users to create and study flash cards, with a special "Memorizer" card type that uses bullet points for answers and provides AI-generated feedback.
+
+It features:
+- A category editor with an `is_memorizer` toggle to designate memorizer cards
+- Validation for bullet-point format on memorizer cards
+- An API route that compares user answers to correct answers using AI and returns hints or Socratic questions for missing points
+- A study mode that iterates until the user is satisfied with their answer, allowing them to rate their performance
+
+# Home Page
+
+![Home Page Screenshot](./docs/images/Homepage.png)
+
+You can create an account or log in to access your flash cards. The app uses Supabase for authentication and data storage.
+![Login Page Screenshot](./docs/images/loginpage.png)
+
+
+# Environment Variables
+Make sure to set the following environment variables in your `.env.local` file:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+```
+
+# Supabase Setup
+1. Create a new project on [Supabase](https://supabase.com/).
+2. Use the provided SQL migration file (`./supabase/migrations/20260611182235_remote_schema.sql`) to set up the database schema. You can run this SQL in the Supabase SQL editor to create the necessary tables and functions.
+3. Migrate the schema to your Supabase project and ensure that the tables are created successfully.
+
+# Supabase Schema
+Supabase base schema is at supabase/migrations/20260611182235_remote_schema.sql 
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
